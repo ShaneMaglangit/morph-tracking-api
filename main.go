@@ -28,9 +28,12 @@ func CrawlMorph(db *database.AxieDB, rpcClient *rpc.Client) {
 	for ; currentBlock <= endBlock; {
 		// Get the logs for morphing events between the current and end block numbers.
 		log.Println("Fetching block", currentBlock, "to", currentBlock+BlockRange)
+		
 		filter := rpc.GetMorphFilter(int64(currentBlock), int64(currentBlock+BlockRange))
 		logs := rpc.GetLogs(rpcClient, filter)
 		if len(logs) == 0 {
+			currentBlock = GetNextStartingBlock(currentBlock, endBlock)
+			endBlock = GetNextEndBlock(rpcClient, currentBlock)
 			continue
 		}
 
@@ -45,17 +48,24 @@ func CrawlMorph(db *database.AxieDB, rpcClient *rpc.Client) {
 		// Save the results to the database
 		db.SaveAxieMultiple(axies)
 
-
-		currentBlock += BlockRange
-		if currentBlock > endBlock {
-			currentBlock = endBlock
-		}
-
-		// Keep appending the end block to the latest block
-		endBlock = rpc.GetLatestBlockNumber(rpcClient)
-		for currentBlock == endBlock {
-			time.Sleep(30 * time.Second)
-			endBlock = rpc.GetLatestBlockNumber(rpcClient)
-		}
+		currentBlock = GetNextStartingBlock(currentBlock, endBlock)
+		endBlock = GetNextEndBlock(rpcClient, currentBlock)
 	}
+}
+
+func GetNextStartingBlock(currentBlock uint64, endBlock uint64) uint64 {
+	nextBlock := currentBlock + BlockRange
+	if nextBlock > endBlock {
+		return endBlock
+	}
+	return nextBlock
+}
+
+func GetNextEndBlock(rpcClient *rpc.Client, currentBlock uint64) uint64 {
+	nextBlock := rpc.GetLatestBlockNumber(rpcClient)
+	for currentBlock == nextBlock {
+		time.Sleep(30 * time.Second)
+		nextBlock = rpc.GetLatestBlockNumber(rpcClient)
+	}
+	return nextBlock
 }
